@@ -1,0 +1,13 @@
+# Virtual Environment
+.venv/
+
+# Environment Variables (API Keys)
+.env
+
+# Raw and Processed Financial Data
+data/raw/
+data/processed/
+
+# Python Cache
+__pycache__/
+*.pyc
