@@ -181,10 +181,15 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
                 neutral_gav = gav if gav > 0 else p['Last_GAV']
                 p['Units'] += qty
                 price_val = abs(float(r['Price'])) if pd.notna(r.get('Price')) else 0.0
+                transaction_label = f"{str(r.get('Original_Type', '')).upper()} {str(r.get('Type', '')).upper()}"
+                is_subscription_event = any(token in transaction_label for token in ['TECKNING', 'TILLDELNING', 'NYEMISSION'])
 
                 if amt > 0:
                     # Explicit cash amount was attached by the broker
                     p['Cost'] += amt
+                elif is_subscription_event and price_val > 0:
+                    # Rights/subscription events should use the explicit subscription price, not the previous average.
+                    p['Cost'] += (qty * price_val)
                 elif neutral_gav > 0:
                     # THE BROKER TRANSFER RE-INJECTION: Cost is re-injected perfectly to neutralize TRANSFER_OUT
                     p['Cost'] += (qty * neutral_gav)
@@ -275,6 +280,7 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
             unrealized_formula = f'=(F{row_num} * C{row_num}) - (C{row_num} * D{row_num})' if u > 0.001 else "0"
 
         total_gain_formula = f'=I{row_num} + G{row_num} + H{row_num}'
+        current_value_formula = f'=C{row_num} * F{row_num}'
         
         if total_invested > 0.01:
             roi_formula = f'=J{row_num} / {round(total_invested, 2)}'
@@ -288,6 +294,7 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
             'Average Buy Price': round(final_gav, 2),
             'Average Sell Price': round(avg_sell, 2), 
             'Live Price': live_price_formula, 
+            'Current Value (SEK)': current_value_formula,
             'Realized Gains': round(data['Realized_Gain'], 2),
             'Net Dividends': round(net_dividends, 2), 
             'Unrealized Gains': f'{unrealized_formula}',

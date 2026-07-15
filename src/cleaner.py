@@ -57,6 +57,20 @@ def clean_and_merge_transactions() -> pd.DataFrame:
                 fallback_enc = "utf-8" if profile["encoding"] == "utf-16" else "utf-16"
                 df = pd.read_csv(file_path, sep=profile["sep"], encoding=fallback_enc, dtype=str)
 
+            # ========================================================
+            # 🛡️ THE SAVR CORPORATE ACTION INTERCEPTOR
+            # Must happen here BEFORE column renaming
+            # ========================================================
+            if bank == 'SAVR' and 'Värdepapper/transaktionsnamn' in df.columns:
+                # Target the exact raw Swedish strings
+                is_savr_anomaly = (df['Värdepapper/transaktionsnamn'] == 'Bolagshändelse') & (df['Transaktionstyp'] == 'Betalning')
+                
+                # Re-route the asset to Intrum and force it to be a BUY of 0 units
+                df.loc[is_savr_anomaly, 'Värdepapper/transaktionsnamn'] = 'Intrum'
+                df.loc[is_savr_anomaly, 'Transaktionstyp'] = 'Köp'
+                df.loc[is_savr_anomaly, 'Antal'] = '0'
+            # ========================================================
+            
             # --- THE MAKULERAD SHIELD ---
             # Scan ALL raw columns for "makuler" (canceled trades) before dropping any data
             mask_makulerad = df.apply(lambda row: row.astype(str).str.contains('makuler', case=False, na=False).any(), axis=1)

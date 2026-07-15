@@ -113,7 +113,16 @@ TRANSACTION_TYPE_MAPPING = {
     # Corporate Actions
     'SPLIT': 'SPLIT', 'SPLIT INLÄGG VP': 'SPLIT', 'SPLIT UTTAG VP': 'SPLIT', 'SPLIT VÄRDEPAPPER': 'SPLIT', 
     'SPLIT NYTT VÄRDEPAPPER': 'SPLIT', 'BYTE INLÄGG VP': 'SPLIT', 'BYTE UTTAG VP': 'SPLIT', 
-    'BYTE': 'SPLIT', 'TILLDELNING NYEMISSION': 'SPLIT'
+    'BYTE': 'SPLIT', 'TILLDELNING NYEMISSION': 'SPLIT',
+
+    # Under the "Share Transfers" block (TRANSFER_IN):
+    'TILLDELNING': 'TRANSFER_IN',          # Natively handles SAVR's BTA addition
+    'TECKNING INLÄGG VP': 'TRANSFER_IN',   # Natively handles Nordnet's BTA addition
+
+    # Under the "Share Transfers" block (TRANSFER_OUT):
+    'TECKNING UT RÄTTER': 'TRANSFER_OUT',  # Natively handles Nordnet's TR removal
+    'BYTE UTTAG VP': 'SPLIT',              # Matches Nordnet's BTA extraction
+    'BYTE INLÄGG VP': 'SPLIT',              # Matches Nordnet's Share insertion
 }
 
 # Used to sweep all cash components into a single ledger asset
@@ -162,7 +171,12 @@ ASSET_RENAME_RULES = {
     
     # --- THE PROSUS FIX ---
     'Prosus N.V.': 'Prosus',
-    'PROSUS N.V.': 'Prosus'
+    'PROSUS N.V.': 'Prosus',
+
+    # --- THE INTRUM FIX ---
+    'INTRUM AB BTA': 'Intrum',
+    'INTRUM JUSTITIA BTA': 'Intrum',
+    'INTRUM': 'Intrum'
 }
 
 
@@ -243,7 +257,14 @@ MANUAL_TICKER_OVERRIDES = {
 
     "VERISURE": "VSURE.ST",
     "ROBINHOOD": "NASDAQ:HOOD",
-    "STORSKOGEN GROUP B": "STO:STOR-B"
+    "STORSKOGEN GROUP B": "STO:STOR-B",
+
+    "INTRUM AB TR": "N/A",
+    "INTRUM JUSTITIA TR": "N/A",
+    "INTRUM AB BTA": "N/A",
+    "INTRUM JUSTITIA BTA": "N/A",
+    "BOLAGSHÄNDELSE": "N/A",
+    "INTRUM": "STO:INTRUM",
 }
 
 # Used to scrape internal backend APIs for unlisted mutual funds
