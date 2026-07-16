@@ -132,7 +132,7 @@ def run_portfolio_agent():
         
         # New SDK syntax for generating content
         response = client.models.generate_content(
-            model='gemini-2.5-pro',
+            model='gemini-flash-latest',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.3, # Slightly higher to allow for qualitative synthesis of news

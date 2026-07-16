@@ -51,7 +51,11 @@ def get_yf_currency(yf_ticker: str) -> Tuple[str, float]:
     if yf_ticker in USD_LSE_ETFS:
         return "USD", 1.0
 
-    # 2. FAST-PATH EXCHANGES (Bypasses the API entirely, prevents rate limits!)
+    # 2. SPECIAL EXCEPTIONS FOR STOCKHOLM TICKERS
+    if yf_ticker == 'VSURE.ST':
+        return "EUR", 1.0
+
+    # 3. FAST-PATH EXCHANGES (Bypasses the API entirely, prevents rate limits!)
     if yf_ticker.endswith('.ST'): return "SEK", 1.0
     if yf_ticker.endswith(('.DE', '.PA', '.AS', '.MC', '.IR', '.HE', '.VI')): return "EUR", 1.0
     if yf_ticker.endswith('.CO'): return "DKK", 1.0
@@ -85,26 +89,25 @@ def get_yf_currency(yf_ticker: str) -> Tuple[str, float]:
 # 2. ROBUST NETWORK OPERATIONS
 # ==========================================
 
+import random # Add this to your imports at the top
+
 def robust_get(url: str, use_cffi: bool = False, max_retries: int = 3, headers: dict = None) -> Optional[std_requests.Response]:
-    """
-    A bulletproof HTTP requester. Automatically handles 429 Rate Limits,
-    timeouts, and can impersonate a Chrome browser to bypass Cloudflare.
-    """
     if headers is None:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-
     for attempt in range(1, max_retries + 1):
         try:
             if use_cffi:
                 res = cffi_requests.get(url, headers=headers, impersonate="chrome", timeout=10)
             else:
                 res = std_requests.get(url, headers=headers, timeout=10)
-
+            
             if res.status_code == 200:
                 return res
             elif res.status_code == 429:
-                print(f" ⏳ API Throttled (429). Cooling down for {attempt * 2}s...")
-                time.sleep(attempt * 2)
+                # Exponential Backoff with Jitter (e.g., 2s, 4s, 8s + random milliseconds)
+                sleep_time = (2 ** attempt) + random.uniform(0, 1)
+                print(f"   API Throttled (429). Exponential backoff for {sleep_time:.2f}s...")
+                time.sleep(sleep_time)
             else:
                 return res
                 
@@ -218,7 +221,7 @@ def get_historical_fx_rate(currency: str, target_date: pd.Timestamp) -> Tuple[fl
 # ==========================================
 
 def clean_swedish_numbers(series: pd.Series) -> pd.Series:
-    """
+    r"""
     Vectorized cleaning of Swedish number formats into Python calculable floats.
     Uses raw string regex r'\s+' to absolutely annihilate ANY kind of space.
     """

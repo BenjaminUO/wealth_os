@@ -15,6 +15,7 @@ from src.ledger import generate_portfolio
 from src.validator import run_validation_agent
 from src.portfolio_metrics import run_metrics_and_viz
 from src.historical_analyzer import run_historical_backtest
+from src.audit_transfers import hunt_phantom_shares
 
 # Optional AI Modules
 from src.qa_agent import run_qa_audit_agent
@@ -79,6 +80,9 @@ def main():
     print("\n--- STEP 6: Historical Backtesting & Benchmarking ---")
     # Runs last so it inherits any 404 ticker fixes made by the Validator in Step 4
     run_historical_backtest()
+
+    print("\n--- STEP 7: Auditing Internal Transfers for Phantom Shares ---")
+    hunt_phantom_shares()
 
 
     # ==========================================

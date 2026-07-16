@@ -116,8 +116,14 @@ def clean_and_merge_transactions() -> pd.DataFrame:
     for col in ['Quantity', 'Price', 'Amount_SEK', 'Fee']:
         df_all[col] = clean_swedish_numbers(df_all[col])
 
-    # Enforce strict ISO-8601 date formatting
+        # Enforce strict ISO-8601 date formatting
     df_all['Date'] = pd.to_datetime(df_all['Date'].astype(str).str.slice(0, 10), format='%Y-%m-%d', errors='coerce')
+    
+    # --- ADD THE SILENT DATA LOSS ALARM ---
+    invalid_dates = df_all[df_all['Date'].isna()]
+    if not invalid_dates.empty:
+        print(f"  [CRITICAL WARNING] Dropping {len(invalid_dates)} rows due to unparseable dates. Check raw CSV format changes.")
+    
     df_all = df_all.dropna(subset=['Date'])
     
     df_all['Asset'] = df_all['Asset'].astype(str).str.strip()

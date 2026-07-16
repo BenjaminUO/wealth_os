@@ -77,6 +77,24 @@ class IntrumRightsIssueTest(unittest.TestCase):
             intrum_row = result.loc[result['Name'] == 'Intrum'].iloc[0]
             self.assertTrue(str(intrum_row['Current Value (SEK)']).startswith('=C'))
 
+    def test_special_manual_ticker_overrides_are_correct(self):
+        from src.config import MANUAL_TICKER_OVERRIDES, ASSET_RENAME_RULES, MANUAL_CURRENCY_OVERRIDES
+
+        self.assertEqual(MANUAL_TICKER_OVERRIDES.get('VERISURE'), 'STO:VSURE')
+        self.assertEqual(MANUAL_TICKER_OVERRIDES.get('ZAPTEC'), 'FRA:6I4')
+        self.assertEqual(MANUAL_TICKER_OVERRIDES.get('SCATEC'), 'FRA:66T')
+        self.assertEqual(MANUAL_TICKER_OVERRIDES.get('AVANT BRANDS'), 'TSE:AVNT')
+        self.assertEqual(MANUAL_TICKER_OVERRIDES.get('AVANT BRANDS INC'), 'TSE:AVNT')
+        self.assertEqual(ASSET_RENAME_RULES.get('ELECTROLUX BTA A'), 'Electrolux A')
+        self.assertEqual(ASSET_RENAME_RULES.get('ELECTROLUX BTA B'), 'Electrolux B')
+        self.assertEqual(MANUAL_CURRENCY_OVERRIDES.get('Verisure'), 'EUR')
+
+    def test_vsure_st_currency_override(self):
+        from src.utils import google_to_yahoo, get_yf_currency
+
+        self.assertEqual(google_to_yahoo('STO:VSURE'), 'VSURE.ST')
+        self.assertEqual(get_yf_currency('VSURE.ST'), ('EUR', 1.0))
+
 
 if __name__ == '__main__':
     unittest.main()

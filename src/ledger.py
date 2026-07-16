@@ -165,14 +165,19 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
                 
         elif cat == 'TRANSFER_OUT':
             if qty > 0:
-                if p['Units'] < qty and p['Cost'] == 0: 
-                    p['Is_Trackable'] = False
+                if p['Units'] < qty and p['Cost'] == 0:
+                     p['Is_Trackable'] = False
                 p['Units'] -= qty
                 
-                if p['Units'] <= 0.000001: 
-                    p['Units'], p['Cost'] = 0.0, 0.0
-                else: 
-                    p['Cost'] -= qty * gav
+                # --- REMOVE THIS BLOCK ---
+                # if p['Units'] <= 0.000001:
+                #      p['Units'], p['Cost'] = 0.0, 0.0
+                # else:
+                #      p['Cost'] -= qty * gav
+                # -------------------------
+                
+                # Replace with:
+                p['Cost'] -= (qty * gav)
                 # CRITICAL: We DO NOT add to Historical_Cost_Sold here. Internal transfers are not sales!
                 
         elif cat == 'TRANSFER_IN':
@@ -252,40 +257,40 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
             final_gav = 1.0
             
         elif gf_ticker != "N/A" and u > 0.001:
-            # Dynamic currency conversion logic protecting LSE ETFs
+            # Dynamic currency conversion logic protecting LSE ETFs (Row-Agnostic)
             live_price_formula = (
-                f'=GOOGLEFINANCE(A{row_num}, "price") * '
-                f'IF(AND(ISNUMBER(SEARCH("LON:", A{row_num})), IFERROR(GOOGLEFINANCE(A{row_num}, "currency"), "")="GBP"), 0.01, 1) * '
-                f'IFERROR(GOOGLEFINANCE("CURRENCY:" & GOOGLEFINANCE(A{row_num}, "currency") & "SEK"), 1)'
+                f'=GOOGLEFINANCE(INDIRECT("A"&ROW()), "price") * '
+                f'IF(AND(ISNUMBER(SEARCH("LON:", INDIRECT("A"&ROW()))), IFERROR(GOOGLEFINANCE(INDIRECT("A"&ROW()), "currency"), "")="GBP"), 0.01, 1) * '
+                f'IFERROR(GOOGLEFINANCE("CURRENCY:" & GOOGLEFINANCE(INDIRECT("A"&ROW()), "currency") & "SEK"), 1)'
             )
-            unrealized_formula = f'=(F{row_num} * C{row_num}) - (C{row_num} * D{row_num})'
+            unrealized_formula = f'=(INDIRECT("F"&ROW()) * INDIRECT("C"&ROW())) - (INDIRECT("C"&ROW()) * INDIRECT("D"&ROW()))'
             
         elif fallback_price is not None and str(fallback_price) != "DELISTED" and u > 0.001:
             price_str = str(round(float(fallback_price), 4))
             
             if fallback_currency.upper() not in ["SEK", "N/A"]:
                 safe_currency = "GBP" if fallback_currency.upper() == "GBP" else fallback_currency.upper()
-                if fallback_currency == "GBp": 
-                    live_price_formula = f'=({price_str} * 0.01) * GOOGLEFINANCE("CURRENCY:GBPSEK")'
-                else: 
-                    live_price_formula = f'={price_str} * GOOGLEFINANCE("CURRENCY:{safe_currency}SEK")'
-            else: 
-                live_price_formula = price_str
-                
-            unrealized_formula = f'=(F{row_num} * C{row_num}) - (C{row_num} * D{row_num})'
+                if fallback_currency == "GBp":
+                     live_price_formula = f'=({price_str} * 0.01) * GOOGLEFINANCE("CURRENCY:GBPSEK")'
+                else:
+                     live_price_formula = f'={price_str} * GOOGLEFINANCE("CURRENCY:{safe_currency}SEK")'
+            else:
+                 live_price_formula = price_str
+                 
+            unrealized_formula = f'=(INDIRECT("F"&ROW()) * INDIRECT("C"&ROW())) - (INDIRECT("C"&ROW()) * INDIRECT("D"&ROW()))'
             
         else:
-            # Handles DELISTED and 0-unit assets perfectly
             live_price_formula = "0"
-            unrealized_formula = f'=(F{row_num} * C{row_num}) - (C{row_num} * D{row_num})' if u > 0.001 else "0"
+            unrealized_formula = f'=(INDIRECT("F"&ROW()) * INDIRECT("C"&ROW())) - (INDIRECT("C"&ROW()) * INDIRECT("D"&ROW()))' if u > 0.001 else "0"
 
-        total_gain_formula = f'=I{row_num} + G{row_num} + H{row_num}'
-        current_value_formula = f'=C{row_num} * F{row_num}'
+        total_gain_formula = f'=INDIRECT("H"&ROW()) + INDIRECT("I"&ROW()) + INDIRECT("J"&ROW())'
+        current_value_formula = f'=INDIRECT("C"&ROW()) * INDIRECT("F"&ROW())'
         
+        # Fixing the "Pure Profit" sort bug & dynamic denominator
         if total_invested > 0.01:
-            roi_formula = f'=J{row_num} / {round(total_invested, 2)}'
+            roi_formula = f'=INDIRECT("K"&ROW()) / INDIRECT("L"&ROW())'
         else:
-            roi_formula = '"Pure Profit"'
+            roi_formula = '""'
 
         results.append({
             'GF Ticker': gf_ticker, 
@@ -299,6 +304,10 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
             'Net Dividends': round(net_dividends, 2), 
             'Unrealized Gains': f'{unrealized_formula}',
             'Total Net Gain/Loss (SEK)': total_gain_formula, 
+            
+            # --- NEW: DEDICATED HISTORICAL MEMORY COLUMN ---
+            'Total Invested Capital (SEK)': round(total_invested, 2),
+            
             'Historical ROI (%)': roi_formula
         })
         row_num += 1

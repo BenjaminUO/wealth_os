@@ -159,6 +159,11 @@ ASSET_RENAME_RULES = {
     'Collector AB': 'Norion Bank',
     'Oersted A/S': 'Ørsted',
     
+    # --- ADD THESE NEW RULES ---
+    'Alphabet A': 'Alphabet Inc Class A',
+    'AVANT BRANDS INC': 'Avant Brands',
+    'Storskogen B': 'Storskogen Group B',
+    
     # --- THE VERISURE IPO FIX ---
     'ANSÖKAN VERISURE PLC': 'Verisure',
     'Ansökan Verisure PLC': 'Verisure',
@@ -176,7 +181,11 @@ ASSET_RENAME_RULES = {
     # --- THE INTRUM FIX ---
     'INTRUM AB BTA': 'Intrum',
     'INTRUM JUSTITIA BTA': 'Intrum',
-    'INTRUM': 'Intrum'
+    'INTRUM': 'Intrum',
+    'ELECTROLUX BTA A': 'Electrolux A',
+    'ELECTROLUX BTA B': 'Electrolux B',
+    'ELUX BTA A': 'Electrolux A',
+    'ELUX BTA B': 'Electrolux B'
 }
 
 
@@ -200,8 +209,8 @@ MANUAL_TICKER_OVERRIDES = {
     
     # Nordic Native Exchange Fixes
     "STORSKOGEN GROUP B": "STO:STOR-B",   # <-- FIXED: Put Storskogen back!
-    "ZAPTEC": "OSL:ZAP",
-    "SCATEC": "OSL:SCATC",
+    "ZAPTEC": "FRA:6I4",
+    "SCATEC": "FRA:66T",
     "SCANDINAVIAN ASTOR GROUP": "STO:ASTOR",
     "SENSYS GATSO GROUP": "STO:SENS",
     "VETERANPOOLEN B": "STO:VPAB",
@@ -219,13 +228,19 @@ MANUAL_TICKER_OVERRIDES = {
     "KAMBI GROUP": "STO:KAMBI",
     "INVESTOR B": "STO:INVE-B",
     "QUICKBIT": "STO:QBIT",
+    "ELECTROLUX A": "STO:ELUX-A",
+    "ELECTROLUX B": "STO:ELUX-B",
 
     # Foreign/Global Overrides
     "EDP RENEWABLES, SA": "ELI:EDPR",        
     "CIELO WASTE SOLUTIONS": "CVE:CMC",      
     "PROSUS": "AMS:PRX",                     
-    "ISHARES CORE S&P 500 UCITS ETF USD (ACC)": "LON:CSP1",
+    "ISHARES CORE S&P 500 UCITS ETF USD (ACC)": "AMS:CSPX",
     "XETRA-GOLD ETC": "FRA:4GLD",
+    "AVANT BRANDS": "TSE:AVNT",
+    "AVANT BRANDS INC": "TSE:AVNT",
+    "EPIROC B": "STO:EPI-B",
+    "VERISURE": "STO:VSURE",
 
     # Bankrupt / Acquired / Private (Bypass API entirely)
     "VALUNO GROUP": "N/A", "OX2 AB": "N/A", "NORDIC PAPER HOLDING AB": "N/A",
@@ -255,7 +270,6 @@ MANUAL_TICKER_OVERRIDES = {
     "SEB SVERIGEFOND SMÅBOLAG C/R": "N/A", "TIN NY TEKNIK A": "N/A",
     "SWEDBANK ROBUR NY TEKNIK A": "N/A", "PARETO SMÅBOLAGSFOND A": "N/A",
 
-    "VERISURE": "VSURE.ST",
     "ROBINHOOD": "NASDAQ:HOOD",
     "STORSKOGEN GROUP B": "STO:STOR-B",
 
