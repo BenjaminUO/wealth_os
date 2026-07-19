@@ -193,7 +193,8 @@ ASSET_RENAME_RULES = {
 
     # Add inside ASSET_RENAME_RULES in config.py
     'PERSHING SQUARE TO ESCROW POSITION': 'IGNORE_ASSET',
-    'Pershing Square SPARC Holdings Ltd': 'IGNORE_ASSET'
+    'Pershing Square SPARC Holdings Ltd': 'IGNORE_ASSET',
+    'MODERN TIMES GROUP TR B 210125': 'IGNORE_ASSET'
 }
 
 
@@ -328,7 +329,7 @@ FALLBACK_FX_RATES = {
 
 # Core tickers required for the shadow portfolio backtester
 CORE_MACRO_SYMBOLS = [
-    "^GSPC", "SEK=X", "EURSEK=X", "GBPSEK=X", 
+    "SPY", "SEK=X", "EURSEK=X", "GBPSEK=X", 
     "DKKSEK=X", "NOKSEK=X", "CADSEK=X", "CHFSEK=X"
 ]
 

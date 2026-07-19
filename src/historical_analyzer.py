@@ -107,6 +107,30 @@ def run_historical_backtest():
     if hist_prices.empty: 
         print("🚨 Failed to download historical data. Aborting backtest.")
         return
+    # ==========================================
+    # THE MUTUAL FUND INJECTION
+    # ==========================================
+    fund_history_file = PROCESSED_DIR / "mutual_fund_hist_prices.csv"
+    if fund_history_file.exists():
+        print("💉 Injecting historical mutual fund NAVs into market data...")
+        
+        # 1. Load the fund data and ensure the index matches our strict datetime format
+        fund_df = pd.read_csv(fund_history_file, index_col='Date', parse_dates=True)
+        fund_df.index = fund_df.index.normalize()
+        
+        # 2. The Weekend Void Fix (Mutual Fund Edition)
+        # Reindex to our continuous timeline and forward-fill weekend/holiday gaps
+        fund_df = fund_df.reindex(timeline).ffill()
+        
+        # 3. Merge seamlessly with Yahoo Finance data
+        hist_prices = pd.concat([hist_prices, fund_df], axis=1)
+        
+        # 4. The Pseudo-Ticker Trick
+        # Update the lookup dictionary so the daily loop knows the "ticker" is just the fund name
+        for fund_name in fund_df.columns:
+            asset_to_yf[fund_name] = fund_name
+    else:
+        print("⚠️ No mutual fund history file found. Unlisted funds will flatline at cost basis.")
 
     print("🌍 Resolving true asset currencies to prevent FX mismatches...")
     asset_currency_map = {}
@@ -134,7 +158,7 @@ def run_historical_backtest():
     df_grouped = df.groupby('Date')
 
     for current_date in timeline:
-        sp_price_usd = float(hist_prices.loc[current_date, '^GSPC']) if '^GSPC' in hist_prices.columns and pd.notna(hist_prices.loc[current_date, '^GSPC']) else None
+        sp_price_usd = float(hist_prices.loc[current_date, 'SPY']) if 'SPY' in hist_prices.columns and pd.notna(hist_prices.loc[current_date, 'SPY']) else None
         usd_sek_rate = float(hist_prices.loc[current_date, 'SEK=X']) if 'SEK=X' in hist_prices.columns and pd.notna(hist_prices.loc[current_date, 'SEK=X']) else FALLBACK_FX_RATES["USD"]
 
         sp_price_sek = (sp_price_usd * usd_sek_rate) if sp_price_usd else None

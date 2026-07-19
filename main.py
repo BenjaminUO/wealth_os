@@ -67,7 +67,7 @@ def main():
         print("🚨 Pipeline aborted at Step 3: Ledger compilation failed.")
         return
 
-    run_validation = args.auto or args.validate or ask_yes_no("\n🛡️ Run deterministic validation agent?", default=False)
+    run_validation = True #args.auto or args.validate or ask_yes_no("\n🛡️ Run deterministic validation agent?", default=False)
     if run_validation:
         print("\n--- STEP 4: Deterministic Validation & GF Tick Check ---")
         verified_df = run_validation_agent(portfolio_df, transactions_df)

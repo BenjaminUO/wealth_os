@@ -15,7 +15,8 @@ from typing import Tuple, Optional, Dict, Any
 # Import Master Configurations and Utilities
 from src.config import (
     TRANSACTIONS_FILE, MAPPING_FILE, MANUAL_TICKER_OVERRIDES,
-    DIRECT_FUND_IDS, KNOWN_YAHOO_TICKERS, EXCHANGE_SUFFIX_MAP
+    DIRECT_FUND_IDS, KNOWN_YAHOO_TICKERS, EXCHANGE_SUFFIX_MAP,
+    PROCESSED_DIR  # <-- NEW: Added this
 )
 from src.utils import robust_get, get_yf_currency
 
@@ -204,6 +205,40 @@ def fetch_avanza_direct_fund(asset_name: str) -> Tuple[Optional[float], str]:
                 return float(price), data.get("currency", "SEK")
     return None, "SEK"
 
+def fetch_historical_avanza_nav(asset_name: str, fund_id: str) -> pd.DataFrame:
+    """
+    Scrapes Avanza's chart API to get the full historical price curve of a mutual fund.
+    Returns a DataFrame formatted exactly like yfinance historical data.
+    """
+    print(f"   -> Fetching historical time-series for {asset_name}...")
+    
+    # Avanza's hidden chart endpoint (MAX retrieves all available history)
+    url = f"https://www.avanza.se/_api/fund-guide/chart/{fund_id}/MAX"
+    
+    res = robust_get(url, use_cffi=True)
+    if not res or res.status_code != 200:
+        print(f"      ❌ Failed to fetch history for {asset_name}")
+        return pd.DataFrame()
+
+    data = res.json()
+    
+    # The API returns a list of data series. We want the one labeled 'NAV'
+    nav_series = next((series for series in data.get('dataSeries', []) if series.get('type') == 'NAV'), None)
+    
+    if not nav_series or not nav_series.get('data'):
+        return pd.DataFrame()
+
+    # Avanza returns data as: [unix_timestamp_milliseconds, price]
+    df = pd.DataFrame(nav_series['data'], columns=['timestamp', asset_name])
+    
+    # Convert Unix timestamps to normalized Pandas Dates
+    df['Date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.normalize()
+    df = df.drop(columns=['timestamp'])
+    df = df.set_index('Date')
+    
+    print(f"      ✅ Downloaded {len(df)} days of historical data.")
+    return df
+
 
 def fetch_known_ticker(asset_name: str) -> Tuple[Optional[float], str]:
     """Bypasses search API by directly fetching a hardcoded known Yahoo ticker."""
@@ -374,7 +409,40 @@ def update_missing_prices():
     else:
         print("\n✅ All non-ticker assets are already up to date.")
 
+# ==========================================
+# 4. PHASE 3: HISTORICAL NAV DATABASE
+# ==========================================
+
+def build_historical_fund_database():
+    """Loops through known mutual funds, downloads their full history, and knits them into a single CSV."""
+    print("\n📚 Building Historical Mutual Fund Database...")
+    
+    if not DIRECT_FUND_IDS:
+        print("   No direct fund IDs configured in config.py. Skipping.")
+        return
+
+    all_fund_data = []
+    
+    for asset_name, fund_id in DIRECT_FUND_IDS.items():
+        fund_df = fetch_historical_avanza_nav(asset_name, fund_id)
+        if not fund_df.empty:
+            all_fund_data.append(fund_df)
+        time.sleep(1) # Polite pacing to prevent Avanza from blocking your IP
+        
+    if all_fund_data:
+        # Concat horizontally (knitting them side-by-side based on the Date index)
+        master_fund_df = pd.concat(all_fund_data, axis=1)
+        
+        # Forward-fill any internal gaps (e.g. if one fund updated late)
+        master_fund_df = master_fund_df.ffill()
+        
+        output_file = PROCESSED_DIR / "mutual_fund_hist_prices.csv"
+        master_fund_df.to_csv(output_file)
+        print(f"🎯 Historical fund database saved! ({len(master_fund_df)} days tracked) -> {output_file.name}")
+    else:
+        print("⚠️ No historical fund data could be aggregated.")
 
 if __name__ == "__main__":
     generate_ticker_mapping()
     update_missing_prices()
+    build_historical_fund_database() # <-- NEW: Triggers Phase 3
