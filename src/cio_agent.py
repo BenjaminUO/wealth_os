@@ -6,11 +6,14 @@ portfolio optimization based on real-time news and market sentiment.
 """
 
 import os
+import re
+import time
+from datetime import datetime
+from pathlib import Path
+
 import pandas as pd
 from google import genai
 from google.genai import types
-from datetime import datetime
-from pathlib import Path
 
 # Import Master Configurations
 from src.config import METRICS_OUTPUT_FILE, REPORTS_DIR
@@ -80,7 +83,7 @@ def generate_executive_briefing() -> str:
     """
     return briefing
 
-def run_portfolio_agent():
+def run_portfolio_agent(max_retries: int = 5, retry_wait_seconds: int = 60):
     print("\n🧠 Compiling financial intelligence and activating web-search for the Master Advisor...")
 
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -95,7 +98,7 @@ def run_portfolio_agent():
     if "ERROR" in executive_briefing:
         print(f"🚨 {executive_briefing}")
         return
-        
+
     today = datetime.now().strftime("%Y-%m-%d")
 
     system_instruction = (
@@ -106,75 +109,85 @@ def run_portfolio_agent():
         "to inform your analysis, especially regarding the client's largest holdings."
     )
 
+    cash_match = re.search(r"Total Cash Reserve:\s*([0-9,\.\-]+)\s*SEK", executive_briefing)
+    cash_reserve = cash_match.group(1).strip() if cash_match else "unknown"
+
     prompt = f"""
     Today is {today}. Review my consolidated system data payload below and provide your strategic audit.
 
     {executive_briefing}
 
     YOUR MANDATE (Respond with hierarchical Markdown, crisp, professional, and actionable):
-    
-    1. THE MACRO & LIQUIDITY VERDICT: Evaluate my cash reserve ({executive_briefing.split('Total Cash Reserve: ')[1].split('SEK')[0].strip()} SEK). Acknowledge that some of this is in interest-bearing accounts, but analyze if my overall liquidity ratio is optimal for my net worth.
-    
+
+    1. THE MACRO & LIQUIDITY VERDICT: Evaluate my cash reserve ({cash_reserve} SEK). Acknowledge that some of this is in interest-bearing accounts, but analyze if my overall liquidity ratio is optimal for my net worth.
+
     2. THE DIVERSIFICATION DEBATE: Address my strategy of buying small amounts of many different stocks. Validate the psychological ease and diversification benefits of this approach, but candidly explain the mathematical realities (e.g., 'diworsification', the dilution of winners, and the portfolio tail risk). Strike a balance between respect and professional advice.
-    
+
     3. LIVE MARKET INTELLIGENCE (Search Required): Use your Google Search capabilities to find recent news, earnings reports, or macroeconomic catalysts affecting my heaviest-weighted stocks and biggest movers. Highlight any critical red flags or massive tailwinds.
-    
+
     4. YIELD STRATEGY & ISK DRAG: Analyze my dividend generators against the ~1.08% ISK 'schablonskatt'. Are my 'zombies' bleeding capital, or is my yield covering the system drag?
-    
+
     5. SECTOR ROTATION & ACTION PLAN: Give me 3 specific, actionable maneuvers to execute next week based on your web search and data analysis.
     """
 
-    try:
-        print("   -> Transmitting briefing to Gemini and initiating Google Search Grounding...")
-        
-        # Enable Google Search Grounding Tool
-        google_search_tool = types.Tool(google_search=types.GoogleSearch())
-        
-        # New SDK syntax for generating content
-        response = client.models.generate_content(
-            model='gemini-flash-latest',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.3, # Slightly higher to allow for qualitative synthesis of news
-                max_output_tokens=4000,
-                system_instruction=system_instruction,
-                tools=[google_search_tool] # Links the AI to the live internet
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"   -> Attempt {attempt}/{max_retries}: Transmitting briefing to Gemini and initiating Google Search Grounding...")
+
+            # Enable Google Search Grounding Tool
+            google_search_tool = types.Tool(google_search=types.GoogleSearch())
+
+            # New SDK syntax for generating content
+            response = client.models.generate_content(
+                model='gemini-flash-latest',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.3,  # Slightly higher to allow for qualitative synthesis of news
+                    max_output_tokens=4000,
+                    system_instruction=system_instruction,
+                    tools=[google_search_tool]  # Links the AI to the live internet
+                )
             )
-        )
-        
-        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        report_path = REPORTS_DIR / f"CIO_Master_Wealth_Report_{today}.md"
-        
-        with open(report_path, "w", encoding="utf-8") as f:
-            f.write(f"# 🏛️ The Master Advisor Audit - {today}\n\n")
-            f.write(response.text)
-            
-            # Append grounding metadata (citations) to the bottom of the report if available
-            if response.candidates and response.candidates[0].grounding_metadata:
-                f.write("\n\n---\n### 🔍 Search Sources & Citations\n")
-                chunks = response.candidates[0].grounding_metadata.grounding_chunks
-                for i, chunk in enumerate(chunks):
-                    if hasattr(chunk, 'web') and chunk.web:
-                        f.write(f"{i+1}. [{chunk.web.title}]({chunk.web.uri})\n")
-            
-        print("\n=========================================================")
-        print(f"🏛️ THE MASTER ADVISOR HAS SPOKEN")
-        print("=========================================================\n")
-        
-        # Print a preview of the action plan to the terminal
-        action_plan_preview = response.text.split("THE CIO'S ACTION PLAN")[-1].strip()
-        # Fallback if the AI uses a slightly different heading
-        if not action_plan_preview or action_plan_preview == response.text.strip():
-            action_plan_preview = response.text.split("ACTION PLAN")[-1].strip()
-            
-        if "5." in action_plan_preview:
-            action_plan_preview = action_plan_preview.replace("5.", "", 1).strip()
-        print(action_plan_preview)
-        
-        print(f"\n💾 Full strategic report (with live news citations) saved to: '{REPORTS_DIR.name}/{report_path.name}'")
-        
-    except Exception as e:
-        print(f"🚨 API Execution Failure: {e}")
+
+            REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+            report_path = REPORTS_DIR / f"CIO_Master_Wealth_Report_{today}.md"
+
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(f"# 🏛️ The Master Advisor Audit - {today}\n\n")
+                f.write(response.text)
+
+                # Append grounding metadata (citations) to the bottom of the report if available
+                if response.candidates and response.candidates[0].grounding_metadata:
+                    f.write("\n\n---\n### 🔍 Search Sources & Citations\n")
+                    chunks = response.candidates[0].grounding_metadata.grounding_chunks
+                    for i, chunk in enumerate(chunks):
+                        if hasattr(chunk, 'web') and chunk.web:
+                            f.write(f"{i+1}. [{chunk.web.title}]({chunk.web.uri})\n")
+
+            print("\n=========================================================")
+            print(f"🏛️ THE MASTER ADVISOR HAS SPOKEN")
+            print("=========================================================\n")
+
+            # Print a preview of the action plan to the terminal
+            action_plan_preview = response.text.split("THE CIO'S ACTION PLAN")[-1].strip()
+            # Fallback if the AI uses a slightly different heading
+            if not action_plan_preview or action_plan_preview == response.text.strip():
+                action_plan_preview = response.text.split("ACTION PLAN")[-1].strip()
+
+            if "5." in action_plan_preview:
+                action_plan_preview = action_plan_preview.replace("5.", "", 1).strip()
+            print(action_plan_preview)
+
+            print(f"\n💾 Full strategic report (with live news citations) saved to: '{REPORTS_DIR.name}/{report_path.name}'")
+            return
+
+        except Exception as e:
+            if attempt < max_retries:
+                print(f"🚨 Attempt {attempt} failed: {e}")
+                print(f"⏳ Retrying in {retry_wait_seconds} seconds...")
+                time.sleep(retry_wait_seconds)
+            else:
+                print(f"🚨 API Execution Failure after {max_retries} attempts: {e}")
 
 if __name__ == "__main__":
     run_portfolio_agent()

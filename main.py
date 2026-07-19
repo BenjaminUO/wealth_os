@@ -34,9 +34,11 @@ def ask_yes_no(question: str, default: bool = False) -> bool:
 def main():
     # Setup the argument parser for automated cloud/cron executions
     parser = argparse.ArgumentParser(description="Wealth OS Financial Engine")
+    parser.add_argument("--validate", action="store_true", help="Run the deterministic validation agent")
+    parser.add_argument("--audit-transfers", action="store_true", help="Run the phantom transfer audit")
     parser.add_argument("--qa", action="store_true", help="Run the Gemini QA Audit Agent")
     parser.add_argument("--advisor", action="store_true", help="Run the Gemini CIO Portfolio Agent")
-    parser.add_argument("--auto", action="store_true", help="Run full pipeline including AI silently (no prompts)")
+    parser.add_argument("--auto", action="store_true", help="Run all optional manual agents silently")
     args = parser.parse_args()
 
     # Load environment variables (API Keys)
@@ -65,11 +67,16 @@ def main():
         print("🚨 Pipeline aborted at Step 3: Ledger compilation failed.")
         return
 
-    print("\n--- STEP 4: Deterministic Validation & GF Tick Check ---")
-    verified_df = run_validation_agent(portfolio_df, transactions_df)
-    if verified_df is None or verified_df.empty:
-        print("🚨 Pipeline aborted at Step 4: Deterministic Validation failed.")
-        return
+    run_validation = args.auto or args.validate or ask_yes_no("\n🛡️ Run deterministic validation agent?", default=False)
+    if run_validation:
+        print("\n--- STEP 4: Deterministic Validation & GF Tick Check ---")
+        verified_df = run_validation_agent(portfolio_df, transactions_df)
+        if verified_df is None or verified_df.empty:
+            print("🚨 Pipeline aborted at Step 4: Deterministic Validation failed.")
+            return
+    else:
+        print("\n--- STEP 4: Skipping deterministic validation agent (run with --validate to enable).")
+        verified_df = portfolio_df
 
     print("\n--- STEP 5: Generating Live Metrics & Visualizations ---")
     metrics_df = run_metrics_and_viz(verified_df)
@@ -81,20 +88,23 @@ def main():
     # Runs last so it inherits any 404 ticker fixes made by the Validator in Step 4
     run_historical_backtest()
 
-    print("\n--- STEP 7: Auditing Internal Transfers for Phantom Shares ---")
-    hunt_phantom_shares()
-
+    run_transfer_audit = args.auto or args.audit_transfers or ask_yes_no("\n🕵️ Run phantom transfer audit?", default=False)
+    if run_transfer_audit:
+        print("\n--- STEP 7: Auditing Internal Transfers for Phantom Shares ---")
+        hunt_phantom_shares()
+    else:
+        print("\n--- STEP 7: Skipping phantom transfer audit (run with --audit-transfers to enable).")
 
     # ==========================================
     # AI INTELLIGENCE PIPELINE
     # ==========================================
-    
+
     # QA Audit Agent (Scans Transactions & Tickers)
-    if args.auto or args.qa or ask_yes_no("\n🤖 Run Forensic QA Audit Agent?"):
+    if args.auto or args.qa or ask_yes_no("\n🤖 Run Forensic QA Audit Agent?", default=False):
         run_qa_audit_agent()
-    
+
     # CIO Portfolio Agent (Scans Net Worth & Asset Weights)
-    if args.auto or args.advisor or ask_yes_no("\n🏛️ Run CIO Portfolio Agent?"):
+    if args.auto or args.advisor or ask_yes_no("\n🏛️ Run CIO Portfolio Agent?", default=False):
         run_portfolio_agent()
 
     elapsed = round(time.time() - start_time, 2)

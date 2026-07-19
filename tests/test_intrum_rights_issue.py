@@ -1,9 +1,13 @@
+import os
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
+import src.cio_agent as cio_mod
 from src.ledger import generate_portfolio
 import src.ledger as ledger_mod
 
@@ -96,6 +100,19 @@ class IntrumRightsIssueTest(unittest.TestCase):
 
         self.assertEqual(google_to_yahoo('STO:VSURE'), 'VSURE.ST')
         self.assertEqual(get_yf_currency('VSURE.ST'), ('EUR', 1.0))
+
+    def test_run_portfolio_agent_retries_before_stopping(self):
+        with patch.dict(os.environ, {'GEMINI_API_KEY': 'test-key'}, clear=False):
+            with patch('src.cio_agent.generate_executive_briefing', return_value='briefing'), \
+                 patch('src.cio_agent.genai.Client') as mock_client, \
+                 patch('src.cio_agent.time.sleep', return_value=None) as mock_sleep:
+                mock_response = type('Response', (), {'text': 'ok', 'candidates': []})()
+                mock_client.return_value.models.generate_content.side_effect = RuntimeError('boom')
+
+                cio_mod.run_portfolio_agent(max_retries=3, retry_wait_seconds=0)
+
+                self.assertEqual(mock_client.return_value.models.generate_content.call_count, 3)
+                self.assertEqual(mock_sleep.call_count, 2)
 
 
 if __name__ == '__main__':
