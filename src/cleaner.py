@@ -170,19 +170,19 @@ def clean_and_merge_transactions() -> pd.DataFrame:
     df_all.loc[(df_all['Standard_Type'] == 'TRANSFER_IN') & (df_all['Quantity'] < 0), 'Standard_Type'] = 'TRANSFER_OUT'
     
     # --- THE STRICT ACCOUNTING FIXES ---
-    # 1. Convert negative BUYs (like SAVR removing exercised Intrum TRs) into TRANSFER_OUTs
+    # Convert negative BUYs into TRANSFER_OUTs
     df_all.loc[(df_all['Standard_Type'] == 'BUY') & (df_all['Quantity'] < 0), 'Standard_Type'] = 'TRANSFER_OUT'
     
-    # 2. Vaporize broker ghost assets that were never officially removed (Pershing SPARC/Escrow)
+    # NEW FIX: Convert negative SELL quantities into positive quantities so double-entry math subtracts properly!
+    df_all.loc[(df_all['Standard_Type'] == 'SELL') & (df_all['Quantity'] < 0), 'Quantity'] = df_all['Quantity'].abs()
+    
+    # Vaporize broker ghost assets
     df_all = df_all[df_all['Asset'] != 'IGNORE_ASSET']
 
-    # 3. THE STRICT DOUBLE-DIP ANNIHILATOR (Fixes Readly, Nordic Paper, Pershing Tntn)
-    # If the broker logs a removal as an AVSKILJNING or INLÖSEN UTTAG VP, but there is ALREADY 
-    # another transaction on the exact same day for that asset (like the actual Inlösen SELL),
-    # we vaporize the redundant transfer to prevent the ledger from bleeding into the negatives.
+    # 3. THE STRICT DOUBLE-DIP ANNIHILATOR
     redundant_mask = (
         (df_all['Standard_Type'] == 'TRANSFER_OUT') & 
-        (df_all['Original_Type'].str.upper().isin(['AVSKILJNING', 'INLÖSEN UTTAG VP'])) &
+        (df_all['Original_Type'].str.upper().isin(['AVSKILJNING', 'INLÖSEN UTTAG VP', 'RENSNING UTTAG VP'])) &
         (df_all.duplicated(subset=['Date', 'Asset'], keep=False))
     )
     double_dip_count = redundant_mask.sum()
