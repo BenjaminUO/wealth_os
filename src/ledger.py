@@ -156,8 +156,14 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
                 p['Units'], p['Cost'] = 0.0, 0.0
                 
         elif cat == 'SPLIT':
-            # Splits adjust units exactly as the broker reported, locking Cost natively
-            p['Units'] += raw_qty
+            # Force negative quantity for known withdrawal terms, even if the broker omitted the minus sign
+            if any(term in str(r.get('Original_Type', '')).upper() for term in ['UTTAG', 'SÄLJ', 'INLÖSEN']):
+                p['Units'] -= abs(raw_qty)
+            elif 'INLÄGG' in str(r.get('Original_Type', '')).upper():
+                p['Units'] += abs(raw_qty)
+            else:
+                p['Units'] += raw_qty
+                
             if p['Units'] > 0: 
                 p['Last_GAV'] = p['Cost'] / p['Units']
             else: 
@@ -255,6 +261,8 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
             live_price_formula = "1"
             unrealized_formula = "0"
             final_gav = 1.0
+            roi_formula = '""'
+            total_invested = 0.0 # <--- Set this to 0 to stop the negative anomaly
             
         elif gf_ticker != "N/A" and u > 0.001:
             # Dynamic currency conversion logic protecting LSE ETFs (Row-Agnostic)

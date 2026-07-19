@@ -132,14 +132,10 @@ def clean_and_merge_transactions() -> pd.DataFrame:
     print("⚖️ Forcing bank terms into Double-Entry Accounting categories...")
     df_all['Standard_Type'] = df_all['Original_Type'].astype(str).str.upper().map(TRANSACTION_TYPE_MAPPING).fillna('OTHER')
 
-    # ==========================================
+    # # ==========================================
     # 3. THE ARTIFACT TRAP FIX (Saves the Verisure units!)
     # ==========================================
-    # 1. Identify temporary artifact assets using exact raw strings before any renaming happens
-    artifact_mask = df_all['Asset'].str.contains(r'(?i)ansökan|BTA|TR\b|UR\b|Inlösen', regex=True) | df_all['Original_Type'].str.contains(r'(?i)ansökan|BTA|TR\b|UR\b|Inlösen', regex=True)
-    
-    # 2. If the broker "deletes" them without paying cash, neutralize the deletion so the units stay in your ledger!
-    df_all.loc[artifact_mask & (df_all['Standard_Type'].isin(['TRANSFER_OUT', 'SELL'])) & (df_all['Amount_SEK'].abs() < 0.01), 'Standard_Type'] = 'OTHER'
+    # REMOVE THIS BLOCK ENTIRELY. It creates phantom shares and corrupts the ledger.
 
 
     # ==========================================
