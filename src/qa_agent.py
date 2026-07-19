@@ -76,7 +76,7 @@ def audit_ticker_mappings(client: genai.Client) -> list:
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-flash-latest',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0, # 0.0 guarantees maximum deterministic accuracy
@@ -138,7 +138,7 @@ def process_transaction_batch(client: genai.Client, batch_df: pd.DataFrame, batc
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-flash-latest',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0,
@@ -185,7 +185,7 @@ def run_qa_audit_agent():
     print(f"\n🕵️ Slicing {len(df)} transactions into AI processing batches...")
     
     # Batch size of 200 is optimal for the LLM context window to prevent attention drift
-    batch_size = 200
+    batch_size = 350
     batches = [df.iloc[i:i + batch_size] for i in range(0, len(df), batch_size)]
     total_batches = len(batches)
     
