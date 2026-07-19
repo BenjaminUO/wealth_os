@@ -85,6 +85,8 @@ class IntrumRightsIssueTest(unittest.TestCase):
         self.assertEqual(MANUAL_TICKER_OVERRIDES.get('SCATEC'), 'FRA:66T')
         self.assertEqual(MANUAL_TICKER_OVERRIDES.get('AVANT BRANDS'), 'TSE:AVNT')
         self.assertEqual(MANUAL_TICKER_OVERRIDES.get('AVANT BRANDS INC'), 'TSE:AVNT')
+        self.assertEqual(MANUAL_TICKER_OVERRIDES.get('VERVE GROUP MEDIA'), 'STO:VER')
+        self.assertEqual(MANUAL_TICKER_OVERRIDES.get('EXP WORLD'), 'NASDAQ:AGNT')
         self.assertEqual(ASSET_RENAME_RULES.get('ELECTROLUX BTA A'), 'Electrolux A')
         self.assertEqual(ASSET_RENAME_RULES.get('ELECTROLUX BTA B'), 'Electrolux B')
         self.assertEqual(MANUAL_CURRENCY_OVERRIDES.get('Verisure'), 'EUR')
