@@ -152,8 +152,11 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
             p['Units'] += raw_qty
             if p['Units'] > 0: 
                 p['Last_GAV'] = p['Cost'] / p['Units']
-            else: 
-                p['Units'], p['Cost'] = 0.0, 0.0
+            elif p['Units'] == 0:
+                p['Cost'] = 0.0
+            # CRITICAL FIX: We removed the strict 'else: p[Units] = 0.0' reset.
+            # This allows intraday negative spinoffs (-50) to perfectly cancel 
+            # positive spinoffs (+50) without the engine artificially wiping the negative memory.
                 
         elif cat == 'SPLIT':
             # Force negative quantity for known withdrawal terms, even if the broker omitted the minus sign
@@ -225,8 +228,8 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
     
     for asset, data in portfolio.items():
         if asset != 'SEK CASH':
-            # Skip completely dead assets with zero financial footprint
-            if data['Units'] < 0.001 and data['Units_Sold'] < 0.001 and abs(data['Realized_Gain']) < 0.01 and abs(data['Dividends']) < 0.01: 
+            # Skip completely dead assets with zero financial footprint (Must use abs() to reveal negative errors!)
+            if abs(data['Units']) < 0.001 and data['Units_Sold'] < 0.001 and abs(data['Realized_Gain']) < 0.01 and abs(data['Dividends']) < 0.01: 
                 continue
                 
             # Memory Quarantine: Protects Google Sheet math from untrackable assets

@@ -132,12 +132,6 @@ def clean_and_merge_transactions() -> pd.DataFrame:
     print("⚖️ Forcing bank terms into Double-Entry Accounting categories...")
     df_all['Standard_Type'] = df_all['Original_Type'].astype(str).str.upper().map(TRANSACTION_TYPE_MAPPING).fillna('OTHER')
 
-    # # ==========================================
-    # 3. THE ARTIFACT TRAP FIX (Saves the Verisure units!)
-    # ==========================================
-    # REMOVE THIS BLOCK ENTIRELY. It creates phantom shares and corrupts the ledger.
-
-
     # ==========================================
     # 4. ASSET UNIFICATION (ISIN & NAME)
     # ==========================================
@@ -163,7 +157,6 @@ def clean_and_merge_transactions() -> pd.DataFrame:
     df_all['Asset'] = df_all['Asset'].str.replace(r'^UTLÄNDSK KÄLLSKATT ', '', regex=True)
     
     # D. Safely map specific artifact names via the surgical ASSET_RENAME_RULES matrix
-    # (This uses the perfect config dictionary we just built to fix Robinhood, Prosus, and Verisure)
     df_all['Asset'] = df_all['Asset'].replace(ASSET_RENAME_RULES)
 
 
@@ -176,6 +169,33 @@ def clean_and_merge_transactions() -> pd.DataFrame:
     df_all.loc[(df_all['Standard_Type'] == 'FEE') & (df_all['Amount_SEK'] > 0), 'Standard_Type'] = 'DEPOSIT'
     df_all.loc[(df_all['Standard_Type'] == 'TRANSFER_IN') & (df_all['Quantity'] < 0), 'Standard_Type'] = 'TRANSFER_OUT'
     
+    # --- THE STRICT ACCOUNTING FIXES ---
+    # 1. Convert negative BUYs (like SAVR removing exercised Intrum TRs) into TRANSFER_OUTs
+    df_all.loc[(df_all['Standard_Type'] == 'BUY') & (df_all['Quantity'] < 0), 'Standard_Type'] = 'TRANSFER_OUT'
+    
+    # 2. Vaporize broker ghost assets that were never officially removed (Pershing SPARC/Escrow)
+    df_all = df_all[df_all['Asset'] != 'IGNORE_ASSET']
+
+    # 3. THE STRICT DOUBLE-DIP ANNIHILATOR (Fixes Readly, Nordic Paper, Pershing Tntn)
+    # If the broker logs a removal as an AVSKILJNING or INLÖSEN UTTAG VP, but there is ALREADY 
+    # another transaction on the exact same day for that asset (like the actual Inlösen SELL),
+    # we vaporize the redundant transfer to prevent the ledger from bleeding into the negatives.
+    redundant_mask = (
+        (df_all['Standard_Type'] == 'TRANSFER_OUT') & 
+        (df_all['Original_Type'].str.upper().isin(['AVSKILJNING', 'INLÖSEN UTTAG VP'])) &
+        (df_all.duplicated(subset=['Date', 'Asset'], keep=False))
+    )
+    double_dip_count = redundant_mask.sum()
+    if double_dip_count > 0:
+        print(f"      🛡️  Strict Accounting Shield: Vaporized {double_dip_count} double-dipped broker transactions.")
+    df_all = df_all[~redundant_mask]
+
+    # 4. THE SAVR INTRUM TR BLACKLIST
+    # SAVR failed to provide the deposit transaction for Intrum TRs, meaning processing their
+    # withdrawal pushes the ledger into negative units. We strictly quarantine their broken data.
+    savr_intrum_mask = (df_all['Bank'] == 'SAVR') & (df_all['Asset'] == 'INTRUM AB TR')
+    df_all = df_all[~savr_intrum_mask]
+
     # Strict SAVR override (Protect the cash pool from pseudo-deposits)
     df_all.loc[df_all['Asset'].astype(str).str.upper() == 'SAVRS FONDAVGIFT', 'Standard_Type'] = 'FEE'
     

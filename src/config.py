@@ -169,8 +169,8 @@ ASSET_RENAME_RULES = {
     'Storskogen B': 'Storskogen Group B',
     
     # --- THE VERISURE IPO FIX ---
-    'ANSÖKAN VERISURE PLC': 'Verisure',
-    'Ansökan Verisure PLC': 'Verisure',
+    #'ANSÖKAN VERISURE PLC': 'Verisure', - DOESNT WORK, REMOVED
+    #'Ansökan Verisure PLC': 'Verisure', - DOESNT WORK, REMOVED
     'VERISURE PLC': 'Verisure',
     
     # --- THE ROBINHOOD FIX ---
@@ -189,7 +189,11 @@ ASSET_RENAME_RULES = {
     'ELECTROLUX BTA A': 'Electrolux A',
     'ELECTROLUX BTA B': 'Electrolux B',
     'ELUX BTA A': 'Electrolux A',
-    'ELUX BTA B': 'Electrolux B'
+    'ELUX BTA B': 'Electrolux B',
+
+    # Add inside ASSET_RENAME_RULES in config.py
+    'PERSHING SQUARE TO ESCROW POSITION': 'IGNORE_ASSET',
+    'Pershing Square SPARC Holdings Ltd': 'IGNORE_ASSET'
 }
 
 
