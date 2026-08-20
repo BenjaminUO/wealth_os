@@ -50,12 +50,16 @@ def clean_and_merge_transactions() -> pd.DataFrame:
             profile = BROKER_PROFILES[bank]
             
             try:
-                # Read raw file with specific broker encoding
-                df = pd.read_csv(file_path, sep=profile["sep"], encoding=profile["encoding"], dtype=str)
-            except UnicodeError:
-                # Emergency encoding fallback
-                fallback_enc = "utf-8" if profile["encoding"] == "utf-16" else "utf-16"
-                df = pd.read_csv(file_path, sep=profile["sep"], encoding=fallback_enc, dtype=str)
+                # Provide on_bad_lines="warn" to prevent pandas from skipping perfectly valid trades
+                df = pd.read_csv(file_path, sep=profile["sep"], encoding=profile["encoding"], dtype=str, on_bad_lines="warn")
+            except (UnicodeError, pd.errors.ParserError):
+                # Emergency fallback if Nordnet changes their export encoding or uses a bad BOM
+                fallback_enc = "utf-8-sig" if profile["encoding"] == "utf-16" else "utf-16"
+                try:
+                    df = pd.read_csv(file_path, sep=profile["sep"], encoding=fallback_enc, dtype=str, on_bad_lines="warn")
+                except Exception:
+                    # Absolute last resort for corrupted Nordnet exports
+                    df = pd.read_csv(file_path, sep='\t', encoding='utf-16', dtype=str, on_bad_lines="warn")
 
             # ========================================================
             # 🛡️ THE SAVR CORPORATE ACTION INTERCEPTOR
@@ -169,12 +173,15 @@ def clean_and_merge_transactions() -> pd.DataFrame:
     df_all.loc[(df_all['Standard_Type'] == 'FEE') & (df_all['Amount_SEK'] > 0), 'Standard_Type'] = 'DEPOSIT'
     df_all.loc[(df_all['Standard_Type'] == 'TRANSFER_IN') & (df_all['Quantity'] < 0), 'Standard_Type'] = 'TRANSFER_OUT'
     
-    # --- THE STRICT ACCOUNTING FIXES ---
-    # Convert negative BUYs into TRANSFER_OUTs
-    df_all.loc[(df_all['Standard_Type'] == 'BUY') & (df_all['Quantity'] < 0), 'Standard_Type'] = 'TRANSFER_OUT'
+    # --- THE STRICT ACCOUNTING FIXES (REVERSAL SHIELD) ---
+    # 1. Canceled SELLs: Broker takes back cash (Amount_SEK < 0). Map to BUY to deduct cash and restore units.
+    df_all.loc[(df_all['Standard_Type'] == 'SELL') & (df_all['Amount_SEK'] < 0), 'Standard_Type'] = 'BUY'
     
-    # NEW FIX: Convert negative SELL quantities into positive quantities so double-entry math subtracts properly!
-    df_all.loc[(df_all['Standard_Type'] == 'SELL') & (df_all['Quantity'] < 0), 'Quantity'] = df_all['Quantity'].abs()
+    # 2. Canceled BUYs: Broker refunds cash (Amount_SEK > 0). Map to SELL to add cash back and remove units.
+    df_all.loc[(df_all['Standard_Type'] == 'BUY') & (df_all['Amount_SEK'] > 0), 'Standard_Type'] = 'SELL'
+    
+    # 3. Canceled DIVIDENDS: Broker takes back cash (Amount_SEK < 0). Map to TAX to deduct cash and correct Net Dividends.
+    df_all.loc[(df_all['Standard_Type'] == 'DIVIDEND') & (df_all['Amount_SEK'] < 0), 'Standard_Type'] = 'TAX'
     
     # Vaporize broker ghost assets
     df_all = df_all[df_all['Asset'] != 'IGNORE_ASSET']

@@ -9,6 +9,7 @@ __pycache__/
 # Financial Data (CRITICAL)
 data/raw/
 data/processed/
+data/history/
 
 # Reports
 reports/
