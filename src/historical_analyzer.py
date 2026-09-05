@@ -8,8 +8,14 @@ import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
 import json
+import sys
 import time
+from pathlib import Path
 from typing import List
+
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 # Import Master Configurations and Utilities
 from src.config import (
@@ -107,6 +113,7 @@ def run_historical_backtest():
     if hist_prices.empty: 
         print("🚨 Failed to download historical data. Aborting backtest.")
         return
+        
     # ==========================================
     # THE MUTUAL FUND INJECTION
     # ==========================================
@@ -126,7 +133,6 @@ def run_historical_backtest():
         hist_prices = pd.concat([hist_prices, fund_df], axis=1)
         
         # 4. The Pseudo-Ticker Trick
-        # Update the lookup dictionary so the daily loop knows the "ticker" is just the fund name
         for fund_name in fund_df.columns:
             asset_to_yf[fund_name] = fund_name
     else:
@@ -241,10 +247,14 @@ def run_historical_backtest():
             if units <= 0.001 or asset == 'SEK CASH': 
                 continue
                 
+            # --- SEGREGATE CSN LÅN ---
+            # Exclude CSN Lån entirely from daily_value so it doesn't affect actual portfolio growth
+            if asset.upper() == "CSN LÅN":
+                continue
+                
             yf_tick = asset_to_yf.get(asset)
             
             # --- THE MUTUAL FUND BLACK HOLE RECOVERY ---
-            # If the asset has no historical ticker (Unlisted Funds), value it at its running Cost Basis.
             if not yf_tick or yf_tick not in hist_prices.columns or pd.isna(hist_prices.loc[current_date, yf_tick]): 
                 daily_value += running_cost[asset]
                 continue
@@ -271,7 +281,9 @@ def run_historical_backtest():
             'Date': current_date, 
             'Total Portfolio Value (SEK)': round(daily_value, 2),
             'Net Invested Capital (SEK)': round(total_net_deposits, 2), 
-            'S&P 500 Shadow Portfolio (SEK)': round(shadow_value, 2)
+            'S&P 500 Shadow Portfolio (SEK)': round(shadow_value, 2),
+            # Saved as positive SEK for clean plotting
+            'CSN Debt (SEK)': round(running_units.get('CSN Lån', 0.0), 2)
         })
 
     # ==========================================
@@ -282,21 +294,36 @@ def run_historical_backtest():
     
     print("📊 Generating Institutional Backtest Curve...")
     fig = go.Figure()
+    
+    # 1. Shadow Benchmark
     fig.add_trace(go.Scatter(
         x=history_df['Date'], y=history_df['S&P 500 Shadow Portfolio (SEK)'], 
         mode='lines', name='S&P 500 Benchmark (Shadow)', 
         line=dict(color='#3498DB', width=2, dash='dot')
     ))
+    
+    # 2. Master Portfolio Value (Pure Investments + Cash)
     fig.add_trace(go.Scatter(
         x=history_df['Date'], y=history_df['Total Portfolio Value (SEK)'], 
         mode='lines', name='Actual Portfolio Value', 
         line=dict(color='#2ECC71', width=3)
     ))
+    
+    # 3. Invested Capital Fill
     fig.add_trace(go.Scatter(
         x=history_df['Date'], y=history_df['Net Invested Capital (SEK)'], 
         mode='lines', name='Total Net Deposits', 
         line=dict(color='#95A5A6', width=2), fill='tozeroy', fillcolor='rgba(149, 165, 166, 0.1)'
     ))
+
+    # 4. Independent CSN Debt Tracking Line
+    if (history_df['CSN Debt (SEK)'] > 0).any():
+        fig.add_trace(go.Scatter(
+            x=history_df['Date'], y=history_df['CSN Debt (SEK)'], 
+            mode='lines', name='CSN Debt (Student Loan)', 
+            line=dict(color='#E74C3C', width=2, dash='dash')
+        ))
+
     fig.update_layout(
         title='Wealth OS: True Portfolio Growth vs. S&P 500 Benchmark', 
         xaxis_title='Date', yaxis_title='Total Value (SEK)', 

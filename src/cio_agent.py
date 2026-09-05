@@ -70,7 +70,7 @@ def generate_executive_briefing() -> str:
     The client employs a highly diversified, incremental buying strategy ("putting in a little bit whenever I find something interesting"). They believe this breadth offers a strong diversification advantage ("hopefully a few will do well").
 
     LIQUIDITY & TAX CONTEXT:
-    The client operates within the Swedish tax system. Capital is primarily held in an ISK (Investeringssparkonto) subject to an annual 'schablonskatt' (~1.08% drag on total value). However, a portion of the uninvested SEK Cash Reserve sits in interest-bearing savings accounts (räntekonto), which mitigates some of the inflation and tax drag.
+    The client operates within the Swedish tax system. Capital is primarily held in an ISK (Investeringssparkonto) subject to an annual 'schablonskatt' (~1.08% drag on total value). A about 50% portion of the uninvested SEK Cash Reserve sits in interest-bearing savings accounts (räntekonto) with about 2-2.5% interest.
 
     TOP 30 CORE HOLDINGS (Ranked by Current Market Value):
     {top_30_list}
@@ -102,32 +102,36 @@ def run_portfolio_agent(max_retries: int = 5, retry_wait_seconds: int = 60):
     today = datetime.now().strftime("%Y-%m-%d")
 
     system_instruction = (
-        "You are the Chief Investment Officer (CIO) of an elite Swedish Family Office. I am your client. "
-        "You provide highly objective, data-driven portfolio audits. "
-        "You must balance professional financial reality with empathy for the client's chosen strategy. "
-        "You are equipped with Google Search capabilities. You MUST search the web for real-time news "
-        "to inform your analysis, especially regarding the client's largest holdings."
+        "You are a senior equity research analyst and portfolio advisor for a private Swedish investor. "
+        "Your objective is to deliver objective, high-conviction stock audits powered by real-time market data. "
+        "You MUST actively search the web for the latest earnings releases, news events, and market sentiment "
+        "affecting the client's individual holdings. Keep your commentary sharp, concise, and focused on "
+        "catalysts, upside/downside asymmetry, and clear recommendations. Do not lecture on general portfolio theory."
     )
 
     cash_match = re.search(r"Total Cash Reserve:\s*([0-9,\.\-]+)\s*SEK", executive_briefing)
     cash_reserve = cash_match.group(1).strip() if cash_match else "unknown"
 
     prompt = f"""
-    Today is {today}. Review my consolidated system data payload below and provide your strategic audit.
+    Today is {today}.
 
+    PORTFOLIO DATA:
+    - Cash Reserve: {cash_reserve} SEK
     {executive_briefing}
 
-    YOUR MANDATE (Respond with hierarchical Markdown, crisp, professional, and actionable):
+    YOUR MANDATE:
 
-    1. THE MACRO & LIQUIDITY VERDICT: Evaluate my cash reserve ({cash_reserve} SEK). Acknowledge that some of this is in interest-bearing accounts, but analyze if my overall liquidity ratio is optimal for my net worth.
+    1. CASH POSITION (Brief):
+    Evaluate the cash reserve ({cash_reserve} SEK) in 1–2 sentences: is it appropriate dry powder, or is it creating unnecessary cash drag?
 
-    2. THE DIVERSIFICATION DEBATE: Address my strategy of buying small amounts of many different stocks. Validate the psychological ease and diversification benefits of this approach, but candidly explain the mathematical realities (e.g., 'diworsification', the dilution of winners, and the portfolio tail risk). Strike a balance between respect and professional advice.
+    2. TOP HOLDINGS & LIVE INTELLIGENCE:
+    For each top holding (and any position experiencing significant volatility), run a web search to identify developments from the past 30–90 days:
+    - Recent Catalysts & News: Key takeaways from recent earnings, management changes, product rollouts, or macro tailwinds/headwinds.
+    - Upside Case: What drives the bull case from here?
+    - Downside Risks: Key valuation, operational, or macro risks to watch.
 
-    3. LIVE MARKET INTELLIGENCE (Search Required): Use your Google Search capabilities to find recent news, earnings reports, or macroeconomic catalysts affecting my heaviest-weighted stocks and biggest movers. Highlight any critical red flags or massive tailwinds.
-
-    4. YIELD STRATEGY & ISK DRAG: Analyze my dividend generators against the ~1.08% ISK 'schablonskatt'. Are my 'zombies' bleeding capital, or is my yield covering the system drag?
-
-    5. SECTOR ROTATION & ACTION PLAN: Give me 3 specific, actionable maneuvers to execute next week based on your web search and data analysis.
+    3. HOLDING VERDICTS:
+    Provide a clear stance for each analyzed position (**Accumulate**, **Hold**, or **Trim**) along with a single-sentence rationale based on current risk/reward.
     """
 
     for attempt in range(1, max_retries + 1):

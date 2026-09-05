@@ -63,6 +63,19 @@ BROKER_PROFILES = {
         "cols": {'Datum': 'Date', 'Transaktionstyp': 'Type', 'Värdepapper/transaktionsnamn': 'Asset',
                  'ISIN': 'ISIN', 'Antal': 'Quantity', 'Kurs inkl. avgifter (kr)': 'Price', 
                  'Belopp (kr)': 'Amount_SEK', 'Konto': 'Account'}
+    },
+
+    "Manual": {
+        "sep": ",",
+        "encoding": "cp1252",
+        "cols": {
+            'Datum': 'Date', 
+            'Typ': 'Type', 
+            'Beskrivning': 'Asset', 
+            'Antal': 'Quantity',
+            'Belopp': 'Amount_SEK', 
+            'Konto': 'Account'
+        }
     }
 }
 
@@ -128,6 +141,11 @@ TRANSACTION_TYPE_MAPPING = {
     'TECKNING UT RÄTTER': 'TRANSFER_OUT',  # Natively handles Nordnet's TR removal
     'BYTE UTTAG VP': 'SPLIT',              # Matches Nordnet's BTA extraction
     'BYTE INLÄGG VP': 'SPLIT',              # Matches Nordnet's Share insertion
+
+    # Other / Miscellaneous / Unknown
+    'HÄVD INNEHAVSRESERVATION': 'OTHER',
+    'INNEHAVSRESERVATION': 'OTHER',
+    'TECKNING INLÄGG VP': 'OTHER',
 }
 
 # Used to sweep all cash components into a single ledger asset
@@ -195,7 +213,17 @@ ASSET_RENAME_RULES = {
     # Add inside ASSET_RENAME_RULES in config.py
     'PERSHING SQUARE TO ESCROW POSITION': 'IGNORE_ASSET',
     'Pershing Square SPARC Holdings Ltd': 'IGNORE_ASSET',
-    'MODERN TIMES GROUP TR B 210125': 'IGNORE_ASSET'
+    'MODERN TIMES GROUP TR B 210125': 'IGNORE_ASSET',
+
+    # Application & IPO Placeholders
+    'ANSÖKAN NOBA BANK GROUP AB (PUBL)': 'IGNORE_ASSET',
+    'ANSÖKAN VERISURE PLC': 'IGNORE_ASSET',
+    'Ansökan Physitrack PLC': 'IGNORE_ASSET',
+    'COLLECTOR BTA 200303': 'IGNORE_ASSET',
+
+    # Pershing Square Warrants/Placeholders
+    'PERSHING SQUARE TO ESCROW POSITION': 'IGNORE_ASSET',
+    'Pershing Square SPARC Holdings Ltd': 'IGNORE_ASSET',
 }
 
 
@@ -347,6 +375,22 @@ MANUAL_TICKER_OVERRIDES = {
     "VAR1.DE": "N/A",
     "XETRA-GOLD ETC": "N/A",
     "ØRSTED": "CPH:ORSTED",
+
+    # German & European Cross-Listings (KEEP THESE)
+    "ZAPTEC": "FRA:6I4",
+    "SCATEC": "FRA:66T",
+    "REDCARE PHARMACY": "FRA:RDC",
+
+    # Bankrupt / Acquired / Delisted (Bypass Live API checks)
+    "THUNDERFUL GROUP": "N/A",
+    "TATTOOED CHEF INC": "N/A",
+    "READLY INTERNATIONAL AB": "N/A",
+    "NORDIC PAPER HOLDING AB": "N/A",
+    "SHIFT TECHNOLOGIES INC": "N/A",
+    "SHIFT TECHNOLOGIES INC CLASS A": "N/A",
+    "SHIFT TECHNOLOGIES A": "N/A",
+
+    "CSN LÅN": "N/A",
 }
 
 # Used to scrape internal backend APIs for unlisted mutual funds

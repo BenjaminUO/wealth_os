@@ -29,8 +29,13 @@ def get_unit_impact(row):
 def run_units_test():
     tx_file = resolve_path('data/processed/combined_transactions.csv')
     if not tx_file.exists():
-        print(f"❌ Error: Could not find '{tx_file}'. Run cleaner.py / main.py first.")
-        return
+        print(f"⚠️ Could not find '{tx_file}'. Running the cleaner first...")
+        from src.cleaner import clean_and_merge_transactions
+
+        clean_and_merge_transactions()
+        if not tx_file.exists():
+            print(f"❌ Error: The cleaner did not create '{tx_file}'.")
+            return
 
     df = pd.read_csv(tx_file)
     df['Unit_Delta'] = df.apply(get_unit_impact, axis=1)

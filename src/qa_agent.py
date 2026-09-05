@@ -76,7 +76,7 @@ def audit_ticker_mappings(client: genai.Client) -> list:
 
     try:
         response = client.models.generate_content(
-            model='gemini-flash-latest',
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0, # 0.0 guarantees maximum deterministic accuracy
@@ -138,7 +138,7 @@ def process_transaction_batch(client: genai.Client, batch_df: pd.DataFrame, batc
 
     try:
         response = client.models.generate_content(
-            model='gemini-flash-latest',
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0,

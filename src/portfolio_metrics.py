@@ -10,8 +10,14 @@ import json
 import yfinance as yf
 import plotly.express as px
 import plotly.graph_objects as go
+import sys
 import time
+from pathlib import Path
 from typing import Dict, Any
+
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 # Import Master Configurations and Utilities
 from src.config import VERIFIED_FILE, MAPPING_FILE, METRICS_OUTPUT_FILE, PROCESSED_DIR, MANUAL_CURRENCY_OVERRIDES
@@ -219,21 +225,44 @@ def generate_master_visualizations(active_equities: pd.DataFrame, full_df: pd.Da
         font=dict(color='#E0E0E0')
     )
 
-    # 1. Allocation Donut (Top 15 by Live Value)
+    # 1. Allocation Donut (Top 15 by Live Value plus liquidity)
     top_15 = active_equities.nlargest(15, 'Current Value (SEK)').copy()
-    other_value = active_equities['Current Value (SEK)'].sum() - top_15['Current Value (SEK)'].sum()
+    cash_row = full_df[full_df['Name'] == 'SEK CASH']
+    cash_value = float(cash_row['Current Value (SEK)'].sum()) if not cash_row.empty else 0.0
+    cash_data = pd.DataFrame([{
+        'Name': 'Liquidity (SEK CASH)',
+        'Current Value (SEK)': cash_value
+    }])
+    pie_data = pd.concat([top_15, cash_data], ignore_index=True)
+
+    other_value = active_equities[
+        ~active_equities['Name'].isin(top_15['Name'])
+    ]['Current Value (SEK)'].sum()
     
     if other_value > 0:
         other_row = pd.DataFrame([{'Name': 'Other Assets', 'Current Value (SEK)': other_value}])
-        pie_data = pd.concat([top_15, other_row], ignore_index=True)
-    else:
-        pie_data = top_15
+        pie_data = pd.concat([pie_data, other_row], ignore_index=True)
+
+    csn_row = full_df[full_df['Name'] == 'CSN Lån']
+    csn_value = abs(float(csn_row['Current Value (SEK)'].sum())) if not csn_row.empty else 0.0
+    gross_value = pie_data['Current Value (SEK)'].sum()
+    csn_ratio_pct = csn_value / gross_value * 100 if gross_value > 0 else 0.0
+    liquidity_pull = [
+        0.08 if name == 'Liquidity (SEK CASH)' else 0.0
+        for name in pie_data['Name']
+    ]
 
     fig1 = px.pie(
         pie_data, values='Current Value (SEK)', names='Name', 
-        title='Portfolio Allocation (Top 15 by Live Value)', hole=0.4
+        title=f'Portfolio Allocation (Top 15 by Live Value) | CSN Lån: {csn_ratio_pct:.1f}% of Gross Value',
+        hole=0.4
     )
-    fig1.update_traces(textposition='inside', textinfo='percent+label')
+    fig1.update_traces(
+        textposition='inside',
+        textinfo='percent+label',
+        pull=liquidity_pull,
+        marker=dict(line=dict(color='#E0E0E0', width=1))
+    )
     fig1.update_layout(**dark_layout)
 
     # 2. Cash Generators Stacked Bar

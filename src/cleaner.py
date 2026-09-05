@@ -44,6 +44,8 @@ def clean_and_merge_transactions() -> pd.DataFrame:
             bank = "SAVR"
         elif "transaktioner" in lower_name:
             bank = "Montrose"
+        elif "manual" in lower_name:
+            bank = "Manual"
 
         if bank:
             print(f"   -> 📂 Ingesting {bank} file: '{filename}'")

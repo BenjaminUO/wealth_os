@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 import pandas as pd
 import json
 from pathlib import Path
@@ -13,6 +19,18 @@ def run_ticker_test():
     tx_file = resolve_path('data/processed/combined_transactions.csv')
     map_file = resolve_path('data/processed/ticker_mapping.json')
     
+    if not tx_file.exists():
+        print(f"⚠️ Could not find '{tx_file}'. Running the cleaner first...")
+        from src.cleaner import clean_and_merge_transactions
+
+        clean_and_merge_transactions()
+
+    if not map_file.exists() and tx_file.exists():
+        print(f"⚠️ Could not find '{map_file}'. Generating the ticker mapping...")
+        from src.scraper import generate_ticker_mapping
+
+        generate_ticker_mapping()
+
     if not tx_file.exists() or not map_file.exists():
         print("❌ Error: Missing combined_transactions.csv or ticker_mapping.json.")
         return

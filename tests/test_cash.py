@@ -1,5 +1,10 @@
 import pandas as pd
+import sys
 from pathlib import Path
+
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 def resolve_path(rel_path: str) -> Path:
     p = Path(rel_path)
@@ -22,8 +27,13 @@ def calculate_deposit_summary(df: pd.DataFrame) -> tuple[float, float, float]:
 def run_cash_test():
     tx_file = resolve_path('data/processed/combined_transactions.csv')
     if not tx_file.exists():
-        print(f"❌ Error: Could not find '{tx_file}'. Please run cleaner.py / main.py first.")
-        return
+        print(f"⚠️ Could not find '{tx_file}'. Running the cleaner first...")
+        from src.cleaner import clean_and_merge_transactions
+
+        clean_and_merge_transactions()
+        if not tx_file.exists():
+            print(f"❌ Error: The cleaner did not create '{tx_file}'.")
+            return
 
     df = pd.read_csv(tx_file)
     df['Amount_SEK'] = pd.to_numeric(df['Amount_SEK'], errors='coerce').fillna(0.0).abs()
