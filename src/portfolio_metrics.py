@@ -244,7 +244,7 @@ def generate_master_visualizations(active_equities: pd.DataFrame, full_df: pd.Da
         pie_data = pd.concat([pie_data, other_row], ignore_index=True)
 
     csn_row = full_df[full_df['Name'] == 'CSN Lån']
-    csn_value = abs(float(csn_row['Current Value (SEK)'].sum())) if not csn_row.empty else 0.0
+    csn_value = abs(float(csn_row['Units'].sum())) if not csn_row.empty else 0.0
     gross_value = pie_data['Current Value (SEK)'].sum()
     csn_ratio_pct = csn_value / gross_value * 100 if gross_value > 0 else 0.0
     liquidity_pull = [

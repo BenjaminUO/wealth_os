@@ -7,13 +7,20 @@ portfolio optimization based on real-time news and market sentiment.
 
 import os
 import re
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+load_dotenv(root_dir / ".env")
 
 # Import Master Configurations
 from src.config import METRICS_OUTPUT_FILE, REPORTS_DIR
@@ -83,115 +90,173 @@ def generate_executive_briefing() -> str:
     """
     return briefing
 
-def run_portfolio_agent(max_retries: int = 5, retry_wait_seconds: int = 60):
-    print("\n🧠 Compiling financial intelligence and activating web-search for the Master Advisor...")
+def _holding_rows(df: pd.DataFrame) -> list[str]:
+    active_equities = df[(df['Units'] > 0.001) & (df['Name'] != 'SEK CASH')]
+    top_holdings = active_equities.nlargest(30, 'Current Value (SEK)')
+    return [
+        f"- {row['Name']} | Ticker: {row['GF Ticker']} | Value: {float(row['Current Value (SEK)']):,.0f} SEK | "
+        f"Weight: {row['Portfolio Weight (%)']}% | ROI: {row['Profitability (%)']}% | "
+        f"Yield: {row['Yield on Cost (%)']}%"
+        for _, row in top_holdings.iterrows()
+    ]
+
+
+def _grounding_sources(response) -> list[str]:
+    sources = []
+    for candidate in getattr(response, 'candidates', []) or []:
+        metadata = getattr(candidate, 'grounding_metadata', None)
+        for chunk in getattr(metadata, 'grounding_chunks', []) or []:
+            web = getattr(chunk, 'web', None)
+            if web and getattr(web, 'uri', None):
+                source = f"[{getattr(web, 'title', web.uri)}]({web.uri})"
+                if source not in sources:
+                    sources.append(source)
+    return sources
+
+
+def _generate_response(
+    client,
+    prompt: str,
+    system_instruction: str,
+    max_output_tokens: int,
+    max_retries: int,
+    retry_wait_seconds: int,
+    use_search: bool,
+):
+    tools = [types.Tool(google_search=types.GoogleSearch())] if use_search else None
+    for attempt in range(1, max_retries + 1):
+        try:
+            config = types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=max_output_tokens,
+                system_instruction=system_instruction,
+            )
+            if tools:
+                config.tools = tools
+            return client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=config,
+            )
+        except Exception as error:
+            if attempt == max_retries:
+                raise
+            wait_seconds = retry_wait_seconds * (2 ** (attempt - 1))
+            print(f"🚨 Attempt {attempt} failed: {error}")
+            print(f"⏳ Retrying this step in {wait_seconds} seconds...")
+            time.sleep(wait_seconds)
+
+
+def run_portfolio_agent(max_retries: int = 3, retry_wait_seconds: int = 30):
+    print("\n🧠 Running the CIO agent in four research passes and one synthesis pass...")
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("🚨 CRITICAL ERROR: 'GEMINI_API_KEY' environment variable is missing.")
         return
-
-    # Initialize the NEW SDK Client
-    client = genai.Client(api_key=api_key)
-
-    executive_briefing = generate_executive_briefing()
-    if "ERROR" in executive_briefing:
-        print(f"🚨 {executive_briefing}")
+    if not METRICS_OUTPUT_FILE.exists():
+        print("🚨 Metrics file missing. Run portfolio_metrics.py first.")
         return
 
+    client = genai.Client(api_key=api_key)
     today = datetime.now().strftime("%Y-%m-%d")
+    metrics_df = pd.read_csv(METRICS_OUTPUT_FILE)
+    holding_rows = _holding_rows(metrics_df)
+    if not holding_rows:
+        print("🚨 The portfolio currently holds no active capital positions.")
+        return
 
-    system_instruction = (
-        "You are a senior equity research analyst and portfolio advisor for a private Swedish investor. "
-        "Your objective is to deliver objective, high-conviction stock audits powered by real-time market data. "
-        "You MUST actively search the web for the latest earnings releases, news events, and market sentiment "
-        "affecting the client's individual holdings. Keep your commentary sharp, concise, and focused on "
-        "catalysts, upside/downside asymmetry, and clear recommendations. Do not lecture on general portfolio theory."
+    cash_row = metrics_df[metrics_df['Name'] == 'SEK CASH']
+    total_cash = float(cash_row['Units'].iloc[0]) if not cash_row.empty else 0.0
+    active_equities = metrics_df[(metrics_df['Units'] > 0.001) & (metrics_df['Name'] != 'SEK CASH')]
+    total_value = pd.to_numeric(active_equities['Current Value (SEK)'], errors='coerce').sum() + total_cash
+    cash_percentage = total_cash / total_value * 100 if total_value > 0 else 0.0
+
+    research_instruction = (
+        "You are a concise equity research analyst. Use Google Search to check recent developments "
+        "from the last 30–90 days. Do not invent facts or prices. For every supplied holding, return "
+        "exactly four short bullets: News/Catalyst, Bull Case, Key Risk, and Verdict (Accumulate, Hold, or Trim). "
+        "Keep each holding under 100 words and cite important sources through grounded search."
     )
+    holding_batches = [holding_rows[index:index + 8] for index in range(0, len(holding_rows), 8)]
+    holding_batches = (holding_batches + [[]] * 4)[:4]
+    research_results = []
+    research_sources = []
 
-    cash_match = re.search(r"Total Cash Reserve:\s*([0-9,\.\-]+)\s*SEK", executive_briefing)
-    cash_reserve = cash_match.group(1).strip() if cash_match else "unknown"
+    for batch_number, batch in enumerate(holding_batches, 1):
+        if not batch:
+            continue
+        print(f"   -> Research pass {batch_number}/4 ({len(batch)} holdings)")
+        batch_prompt = f"""
+Today is {today}. Analyze only these holdings:
+{chr(10).join(batch)}
 
-    prompt = f"""
-    Today is {today}.
-
-    PORTFOLIO DATA:
-    - Cash Reserve: {cash_reserve} SEK
-    {executive_briefing}
-
-    YOUR MANDATE:
-
-    1. CASH POSITION (Brief):
-    Evaluate the cash reserve ({cash_reserve} SEK) in 1–2 sentences: is it appropriate dry powder, or is it creating unnecessary cash drag?
-
-    2. TOP HOLDINGS & LIVE INTELLIGENCE:
-    For each top holding (and any position experiencing significant volatility), run a web search to identify developments from the past 30–90 days:
-    - Recent Catalysts & News: Key takeaways from recent earnings, management changes, product rollouts, or macro tailwinds/headwinds.
-    - Upside Case: What drives the bull case from here?
-    - Downside Risks: Key valuation, operational, or macro risks to watch.
-
-    3. HOLDING VERDICTS:
-    Provide a clear stance for each analyzed position (**Accumulate**, **Hold**, or **Trim**) along with a single-sentence rationale based on current risk/reward.
-    """
-
-    for attempt in range(1, max_retries + 1):
+Portfolio context: cash reserve {total_cash:,.0f} SEK ({cash_percentage:.1f}% of total system value).
+Focus on material, recent information and keep the response compact.
+"""
         try:
-            print(f"   -> Attempt {attempt}/{max_retries}: Transmitting briefing to Gemini and initiating Google Search Grounding...")
-
-            # Enable Google Search Grounding Tool
-            google_search_tool = types.Tool(google_search=types.GoogleSearch())
-
-            # New SDK syntax for generating content
-            response = client.models.generate_content(
-                model='gemini-flash-latest',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.3,  # Slightly higher to allow for qualitative synthesis of news
-                    max_output_tokens=4000,
-                    system_instruction=system_instruction,
-                    tools=[google_search_tool]  # Links the AI to the live internet
-                )
+            response = _generate_response(
+                client, batch_prompt, research_instruction, 1400,
+                max_retries, retry_wait_seconds, use_search=True
             )
+            text = response.text.strip()
+            research_results.append(f"RESEARCH PASS {batch_number}\n{text}")
+            research_sources.extend(_grounding_sources(response))
+        except Exception as error:
+            research_results.append(f"RESEARCH PASS {batch_number}\nUnavailable after retries: {error}")
+            print(f"🚨 Research pass {batch_number} failed; continuing with the remaining passes.")
 
-            REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-            report_path = REPORTS_DIR / f"CIO_Master_Wealth_Report_{today}.md"
+    research_digest = "\n\n".join(research_results)
+    synthesis_instruction = (
+        "You are the senior CIO for a private Swedish investor. Synthesize the supplied research into a "
+        "concise, evidence-based report. Do not perform additional web searches. Clearly distinguish facts "
+        "from judgment, avoid repeating every holding, and finish with a prioritized action plan."
+    )
+    synthesis_prompt = f"""
+Today is {today}.
 
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.write(f"# 🏛️ The Master Advisor Audit - {today}\n\n")
-                f.write(response.text)
+PORTFOLIO SNAPSHOT:
+- Total system value: {total_value:,.0f} SEK
+- Cash reserve: {total_cash:,.0f} SEK ({cash_percentage:.1f}%)
+- Active positions analyzed: {len(holding_rows)}
 
-                # Append grounding metadata (citations) to the bottom of the report if available
-                if response.candidates and response.candidates[0].grounding_metadata:
-                    f.write("\n\n---\n### 🔍 Search Sources & Citations\n")
-                    chunks = response.candidates[0].grounding_metadata.grounding_chunks
-                    for i, chunk in enumerate(chunks):
-                        if hasattr(chunk, 'web') and chunk.web:
-                            f.write(f"{i+1}. [{chunk.web.title}]({chunk.web.uri})\n")
 
-            print("\n=========================================================")
-            print(f"🏛️ THE MASTER ADVISOR HAS SPOKEN")
-            print("=========================================================\n")
 
-            # Print a preview of the action plan to the terminal
-            action_plan_preview = response.text.split("THE CIO'S ACTION PLAN")[-1].strip()
-            # Fallback if the AI uses a slightly different heading
-            if not action_plan_preview or action_plan_preview == response.text.strip():
-                action_plan_preview = response.text.split("ACTION PLAN")[-1].strip()
+Write the final report with these sections:
+1. Executive Summary
+2. Cash Position
+3. Most Important Catalysts and Risks
+4. Holding Verdicts, grouped into Accumulate, Hold, and Trim
+5. THE CIO'S ACTION PLAN
+Keep it under 2,500 words.
+"""
+    print("   -> Synthesis pass 5/5")
+    try:
+        final_response = _generate_response(
+            client, synthesis_prompt, synthesis_instruction, 2600,
+            max_retries, retry_wait_seconds, use_search=False
+        )
+    except Exception as error:
+        print(f"🚨 Synthesis failed after retries: {error}")
+        return
 
-            if "5." in action_plan_preview:
-                action_plan_preview = action_plan_preview.replace("5.", "", 1).strip()
-            print(action_plan_preview)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    research_path = REPORTS_DIR / f"CIO_Research_Batches_{today}.md"
+    report_path = REPORTS_DIR / f"CIO_Master_Wealth_Report_{today}.md"
+    research_path.write_text(research_digest, encoding="utf-8")
+    with report_path.open("w", encoding="utf-8") as report:
+        report.write(f"# 🏛️ The Master Advisor Audit - {today}\n\n")
+        report.write(final_response.text)
+        all_sources = research_sources + _grounding_sources(final_response)
+        if all_sources:
+            report.write("\n\n---\n### 🔍 Search Sources & Citations\n")
+            for index, source in enumerate(dict.fromkeys(all_sources), 1):
+                report.write(f"{index}. {source}\n")
 
-            print(f"\n💾 Full strategic report (with live news citations) saved to: '{REPORTS_DIR.name}/{report_path.name}'")
-            return
-
-        except Exception as e:
-            if attempt < max_retries:
-                print(f"🚨 Attempt {attempt} failed: {e}")
-                print(f"⏳ Retrying in {retry_wait_seconds} seconds...")
-                time.sleep(retry_wait_seconds)
-            else:
-                print(f"🚨 API Execution Failure after {max_retries} attempts: {e}")
-
+    print("\n=========================================================")
+    print("🏛️ THE MASTER ADVISOR HAS SPOKEN")
+    print("=========================================================\n")
+    print(final_response.text)
+    print(f"\n💾 Full strategic report saved to: '{REPORTS_DIR.name}/{report_path.name}'")
 if __name__ == "__main__":
     run_portfolio_agent()

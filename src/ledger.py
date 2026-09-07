@@ -303,6 +303,19 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
         else:
             roi_formula = '""'
 
+        # --- PERFORMANCE CHANGE FORMULAS (Row-Agnostic with INDIRECT) ---
+        day_change_formula = '=(GOOGLEFINANCE(INDIRECT("A"&ROW()), "price") - INDEX(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", TODAY()-7, TODAY()), ROWS(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", TODAY()-7, TODAY())), 2)) / INDEX(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", TODAY()-7, TODAY()), ROWS(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", TODAY()-7, TODAY())), 2)'
+        
+        one_year_change_formula = '=(GOOGLEFINANCE(INDIRECT("A"&ROW()), "price") - INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -12), TODAY())), 1, 2)) / INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -12), TODAY())), 1, 2)'
+        
+        two_year_change_formula = '=(GOOGLEFINANCE(INDIRECT("A"&ROW()), "price") - INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -24), TODAY())), 1, 2)) / INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -24), TODAY())), 1, 2)'
+        
+        three_year_change_formula = '=(GOOGLEFINANCE(INDIRECT("A"&ROW()), "price") - INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -36), TODAY())), 1, 2)) / INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -36), TODAY())), 1, 2)'
+        
+        five_year_change_formula = '=(GOOGLEFINANCE(INDIRECT("A"&ROW()), "price") - INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -60), TODAY())), 1, 2)) / INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -60), TODAY())), 1, 2)'
+        
+        ten_year_change_formula = '=(GOOGLEFINANCE(INDIRECT("A"&ROW()), "price") - INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -120), TODAY())), 1, 2)) / INDEX(SORT(GOOGLEFINANCE(INDIRECT("A"&ROW()), "close", EDATE(TODAY(), -120), TODAY())), 1, 2)'
+        
         results.append({
             'GF Ticker': gf_ticker, 
             'Name': asset, 
@@ -319,7 +332,15 @@ def generate_portfolio(df: pd.DataFrame = None) -> pd.DataFrame:
             # --- NEW: DEDICATED HISTORICAL MEMORY COLUMN ---
             'Total Invested Capital (SEK)': round(total_invested, 2),
             
-            'Historical ROI (%)': roi_formula
+            'Historical ROI (%)': roi_formula,
+            
+            # --- NEW: 6 PERFORMANCE CHANGE COLUMNS ---
+            'Day change': day_change_formula,
+            '1 year change': one_year_change_formula,
+            '2 year change': two_year_change_formula,
+            '3 year change': three_year_change_formula,
+            '5 year change': five_year_change_formula,
+            '10 year change': ten_year_change_formula
         })
         row_num += 1
 
